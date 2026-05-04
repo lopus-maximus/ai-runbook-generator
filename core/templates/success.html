@@ -1,0 +1,119 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runbook Ready</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}" />
+  </head>
+
+  <body>
+    <div class="container">
+      <a href="/" class="back-link">← New runbook</a>
+
+      <div class="page-header">
+        <div class="label">Complete</div>
+        <h1>Runbook Ready</h1>
+      </div>
+
+      <!-- Status banner -->
+      <div class="status-banner">
+        <div class="dot"></div>
+        <span>Processing complete — your document is ready to download</span>
+      </div>
+
+      <!-- Stats grid -->
+      <div class="meta-grid">
+        <div class="meta-item">
+          <div class="key">Meeting ID</div>
+          <div class="value">{{ meeting.id }}</div>
+        </div>
+        <div class="meta-item">
+          <div class="key">Status</div>
+          <div class="value success">{{ meeting.status }}</div>
+        </div>
+        <div class="meta-item">
+          <div class="key">Frames extracted</div>
+          <div class="value">{{ meeting.frame_count }}</div>
+        </div>
+        <div class="meta-item">
+          <div class="key">Processing time</div>
+          <div class="value">{{ meeting.processing_time }}s</div>
+        </div>
+        <div class="meta-item">
+          <div class="key">Language detected</div>
+          <div class="value">{{ meeting.detected_language|upper }}</div>
+        </div>
+        <div class="meta-item">
+          <div class="key">Translated</div>
+          <div class="value {% if meeting.was_translated %}success{% endif %}">
+            {% if meeting.was_translated %}Yes &rarr; English{% else %}No{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Runbook title -->
+      {% if runbook.title %}
+      <div class="card" style="margin-bottom: 20px">
+        <div class="card-label">Runbook Title</div>
+        <div style="font-size: 18px; font-weight: 600">{{ runbook.title }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Sections preview -->
+      {% if runbook.sections %}
+      <div class="card" style="margin-bottom: 20px">
+        <div class="card-label">Sections</div>
+        {% for section in runbook.sections %}
+        <div class="list-row">
+          <span class="list-index">{{ forloop.counter }}</span>
+          <span style="font-size: 14px; color: var(--text-dim)">{{ section.heading }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Action items preview -->
+      {% if runbook.action_items %}
+      <div class="card" style="margin-bottom: 20px">
+        <div class="card-label">Action Items</div>
+        {% for item in runbook.action_items %}
+        <div class="list-row" style="flex-wrap: wrap; gap: 4px">
+          <span style="color: var(--text); font-size: 13px">{{ item.task }}</span>
+          {% if item.owner %}<span style="color: var(--text-muted); font-size: 13px">— {{ item.owner }}</span>{% endif %}
+          {% if item.deadline %}<span class="tag">{{ item.deadline }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <hr class="divider" />
+
+      <!-- Primary actions -->
+      <div class="action-row">
+        <a href="/media/runbook_{{ meeting.id }}.docx" class="btn">
+          <span>↓</span><span>Download Runbook</span>
+        </a>
+        <a href="/transcript/{{ meeting.id }}/" class="btn btn-outline">
+          <span>↓</span><span>Download Transcript</span>
+        </a>
+      </div>
+
+      <!-- Secondary actions -->
+      <div class="action-row" style="margin-top: 12px">
+        <a href="/edit/{{ meeting.id }}/" class="btn btn-ghost">
+          <span>✎</span><span>Edit Runbook</span>
+        </a>
+        <a href="/qa/{{ meeting.id }}/" class="btn btn-ghost">
+          <span>?</span><span>Ask Questions</span>
+        </a>
+        <a href="/frames/{{ meeting.id }}/" class="btn btn-ghost">
+          View Frames
+        </a>
+      </div>
+    </div>
+  </body>
+</html>

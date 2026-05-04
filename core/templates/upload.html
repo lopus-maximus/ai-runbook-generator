@@ -1,0 +1,301 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Runbook Generator</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}" />
+  </head>
+
+  <body>
+    <div class="container">
+      <!-- UPLOAD FORM -->
+      <div id="upload-view">
+        <div class="page-header">
+          <div class="label">Runbook Generator</div>
+          <h1>Upload Meeting</h1>
+          <p>Audio extraction and transcription happen automatically.</p>
+        </div>
+
+        <div class="card">
+          <form id="upload-form" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <div class="field">
+              <label
+                >Video File <span style="color: var(--accent)">*</span></label
+              >
+              <input type="file" name="video" accept="video/*" required />
+            </div>
+
+            <div class="field">
+              <label>PDF <span class="badge">optional</span></label>
+              <input type="file" name="pdf" accept=".pdf" />
+            </div>
+
+            <div class="field">
+              <label>Custom Template <span class="badge">optional</span></label>
+              <textarea
+                name="template"
+                placeholder="Paste your template headings here, one per line…"
+              ></textarea>
+              <div class="hint">
+                Leave blank to use the default runbook structure.
+              </div>
+            </div>
+
+            <button type="submit" class="btn" id="submit-btn">
+              <span>Generate Runbook</span>
+              <span>→</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- PROGRESS VIEW (hidden initially) -->
+      <div id="progress-view" style="display: none">
+        <div class="page-header">
+          <div class="label">Processing</div>
+          <h1>Generating your runbook</h1>
+          <p>This usually takes 30–90 seconds. Don't close this tab.</p>
+        </div>
+
+        <div class="card">
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+          </div>
+
+          <div style="margin-top: 24px" class="pipeline" id="pipeline">
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-upload">1</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-upload">
+                  Uploading files
+                </div>
+                <div class="step-detail" id="detail-upload">Waiting…</div>
+              </div>
+            </div>
+
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-frames">2</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-frames">
+                  Extracting frames
+                </div>
+                <div class="step-detail" id="detail-frames">Waiting…</div>
+              </div>
+            </div>
+
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-dedup">3</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-dedup">
+                  Removing duplicate frames
+                </div>
+                <div class="step-detail" id="detail-dedup">Waiting…</div>
+              </div>
+            </div>
+
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-audio">4</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-audio">
+                  Extracting &amp; transcribing audio
+                </div>
+                <div class="step-detail" id="detail-audio">Waiting…</div>
+              </div>
+            </div>
+
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-ai">5</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-ai">
+                  Generating runbook with AI
+                </div>
+                <div class="step-detail" id="detail-ai">Waiting…</div>
+              </div>
+            </div>
+
+            <div class="pipeline-step">
+              <div class="step-icon" id="icon-done">6</div>
+              <div class="step-body">
+                <div class="step-name muted" id="name-done">
+                  Building document
+                </div>
+                <div class="step-detail" id="detail-done">Waiting…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("upload-form");
+      const uploadView = document.getElementById("upload-view");
+      const progressView = document.getElementById("progress-view");
+      const progressBar = document.getElementById("progress-bar");
+
+      const STEPS = [
+        ["upload", 10],
+        ["frames", 30],
+        ["dedup", 45],
+        ["audio", 65],
+        ["ai", 85],
+        ["done", 100],
+      ];
+
+      function setStepActive(id, msg) {
+        const icon = document.getElementById(`icon-${id}`);
+        const name = document.getElementById(`name-${id}`);
+        const detail = document.getElementById(`detail-${id}`);
+        icon.className = "step-icon active";
+        icon.innerHTML = '<div class="spinner"></div>';
+        name.className = "step-name";
+        if (msg) {
+          detail.textContent = msg;
+        }
+        detail.className = "step-detail active";
+      }
+
+      function setStepDone(id, msg) {
+        const icon = document.getElementById(`icon-${id}`);
+        const name = document.getElementById(`name-${id}`);
+        const detail = document.getElementById(`detail-${id}`);
+        icon.className = "step-icon done";
+        icon.innerHTML = "✓";
+        name.className = "step-name";
+        detail.textContent = msg || "Done";
+        detail.className = "step-detail done";
+      }
+
+      function setProgress(pct) {
+        progressBar.style.width = pct + "%";
+      }
+
+      function runSimulatedProgress() {
+        const schedule = [
+          [
+            0,
+            () => {
+              setStepActive("upload", "Uploading…");
+              setProgress(5);
+            },
+          ],
+          [
+            800,
+            () => {
+              setStepDone("upload", "Received");
+              setProgress(10);
+            },
+          ],
+          [
+            900,
+            () => {
+              setStepActive("frames", "Analysing video…");
+            },
+          ],
+          [
+            6000,
+            () => {
+              setStepDone("frames", "Frames extracted");
+              setProgress(30);
+            },
+          ],
+          [
+            6200,
+            () => {
+              setStepActive("dedup", "Comparing frames…");
+            },
+          ],
+          [
+            9000,
+            () => {
+              setStepDone("dedup", "Duplicates removed");
+              setProgress(45);
+            },
+          ],
+          [
+            9200,
+            () => {
+              setStepActive("audio", "Stripping audio track…");
+            },
+          ],
+          [
+            12000,
+            () => {
+              document.getElementById("detail-audio").textContent =
+                "Transcribing with Whisper…";
+            },
+          ],
+          [
+            30000,
+            () => {
+              setStepDone("audio", "Transcript ready");
+              setProgress(65);
+            },
+          ],
+          [
+            30200,
+            () => {
+              setStepActive("ai", "Sending to Gemini…");
+            },
+          ],
+          [
+            32000,
+            () => {
+              document.getElementById("detail-ai").textContent =
+                "Building runbook sections…";
+            },
+          ],
+        ];
+
+        schedule.forEach(([delay, fn]) => setTimeout(fn, delay));
+      }
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        uploadView.style.display = "none";
+        progressView.style.display = "block";
+        runSimulatedProgress();
+
+        const data = new FormData(form);
+
+        fetch("", {
+          method: "POST",
+          body: data,
+        })
+          .then((res) => {
+            if (!res.ok)
+              throw new Error("Server returned an error (" + res.status + ")");
+            return res.text();
+          })
+          .then((html) => {
+            setStepDone("ai", "Runbook generated");
+            setProgress(90);
+            setStepActive("done", "Finalising document…");
+            setTimeout(() => {
+              setStepDone("done", "Runbook ready");
+              setProgress(100);
+              setTimeout(() => {
+                document.open();
+                document.write(html);
+                document.close();
+              }, 500);
+            }, 700);
+          })
+          .catch((err) => {
+            progressView.innerHTML = `
+              <div class="page-header">
+                <div class="label" style="color:#f87171">Error</div>
+                <h1>Something went wrong</h1>
+                <p>${err.message}</p>
+              </div>
+              <a href="/" class="btn btn-outline" style="margin-top:16px">← Try again</a>
+            `;
+          });
+      });
+    </script>
+  </body>
+</html>

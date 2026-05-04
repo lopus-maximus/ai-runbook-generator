@@ -1,0 +1,307 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edit Runbook</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}" />
+    <style>
+      /* Only styles not covered by style.css */
+      .runbook-preview {
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .rb-section { margin-bottom: 18px; }
+      .rb-section-heading {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+        margin-bottom: 6px;
+      }
+      .rb-para {
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.6;
+        margin-bottom: 4px;
+      }
+      .rb-list-item {
+        font-size: 13px;
+        color: var(--text-dim);
+        padding-left: 14px;
+        position: relative;
+        margin-bottom: 3px;
+      }
+      .rb-list-item::before {
+        content: "·";
+        position: absolute;
+        left: 0;
+        color: var(--accent);
+      }
+      .rb-action-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+        align-items: center;
+      }
+      .rb-task { font-size: 13px; color: var(--text); }
+      .rb-owner { font-size: 12px; color: var(--text-muted); }
+
+      .history-log {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .history-entry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .history-entry .he-text {
+        flex: 1;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+
+      .section-divider {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin: 4px 0 8px;
+      }
+
+      .ai-loading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .ai-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        flex-shrink: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <a href="/success/{{ meeting.id }}/" class="back-link">← Back to results</a>
+
+      <div class="page-header">
+        <div class="label">AI Editor</div>
+        <h1>Edit Runbook</h1>
+        <p>Describe the changes you want — Gemini will rewrite the runbook accordingly.</p>
+      </div>
+
+      <!-- Current runbook preview -->
+      <div class="section-divider">Current Runbook</div>
+      <div class="card runbook-preview" id="runbook-preview" style="margin-bottom: 20px">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Change history (hidden until first edit) -->
+      <div id="history-section" style="display:none; margin-bottom: 20px">
+        <div class="section-divider">Change History</div>
+        <div class="history-log" id="history-log"></div>
+      </div>
+
+      <!-- Instruction input -->
+      <div class="section-divider">Request a Change</div>
+      <div class="card" style="margin-bottom: 20px">
+        <div class="card-label" style="margin-bottom: 10px">What would you like to change?</div>
+        <textarea
+          id="instruction-input"
+          class="edit-textarea"
+          style="min-height: 90px"
+          placeholder="e.g. Add a section on budget approvals, make action items more specific, rewrite the overview to be shorter…"
+        ></textarea>
+
+        <!-- Quick-fill chips reuse suggestion-chip from style.css -->
+        <div class="suggestions" style="margin: 12px 0">
+          <span class="suggestions-label">Try:</span>
+          <button class="suggestion-chip" onclick="fillInstruction(this)">Make the overview more concise</button>
+          <button class="suggestion-chip" onclick="fillInstruction(this)">Add a Budget &amp; Resources section</button>
+          <button class="suggestion-chip" onclick="fillInstruction(this)">Make action items more specific with clear deadlines</button>
+          <button class="suggestion-chip" onclick="fillInstruction(this)">Rewrite risks as a prioritised list</button>
+          <button class="suggestion-chip" onclick="fillInstruction(this)">Add an Executive Summary at the top</button>
+        </div>
+
+        <!-- Save banner -->
+        <div id="save-banner" class="save-banner" style="display:none"></div>
+
+        <div class="action-row" style="margin-top: 4px; align-items: center">
+          <button class="btn" id="apply-btn" onclick="applyChanges()">
+            <span>✦</span><span>Apply with AI</span>
+          </button>
+          <div id="loading-indicator" style="display:none" class="ai-loading">
+            <div class="ai-spinner"></div>
+            <span id="loading-text">Sending to Gemini…</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider" />
+      <div class="action-row">
+        <a href="/media/runbook_{{ meeting.id }}.docx" class="btn">
+          <span>↓</span><span>Download Updated Runbook</span>
+        </a>
+      </div>
+    </div>
+
+    <script>
+      const MEETING_ID = {{ meeting.id }};
+      let currentRunbook = {{ runbook_json|safe }};
+
+      function getCookie(name) {
+        const m = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+        return m ? m[2] : "";
+      }
+
+      // ---- RENDER RUNBOOK PREVIEW ----
+      function renderPreview(data) {
+        const el = document.getElementById("runbook-preview");
+        let html = `<div style="font-size:18px;font-weight:600;margin-bottom:18px;color:var(--text)">${esc(data.title || "Untitled Runbook")}</div>`;
+
+        (data.sections || []).forEach(s => {
+          html += `<div class="rb-section">
+            <div class="rb-section-heading">${esc(s.heading || "")}</div>`;
+          (s.paragraphs || []).forEach(p => {
+            html += `<div class="rb-para">${esc(p)}</div>`;
+          });
+          html += `</div>`;
+        });
+
+        if ((data.key_decisions || []).length) {
+          html += `<div class="rb-section"><div class="rb-section-heading">Key Decisions</div>`;
+          data.key_decisions.forEach(d => { html += `<div class="rb-list-item">${esc(d)}</div>`; });
+          html += `</div>`;
+        }
+
+        if ((data.action_items || []).length) {
+          html += `<div class="rb-section"><div class="rb-section-heading">Action Items</div>`;
+          data.action_items.forEach(a => {
+            html += `<div class="rb-action-row">
+              <span class="rb-task">${esc(a.task || "")}</span>
+              ${a.owner ? `<span class="rb-owner">— ${esc(a.owner)}</span>` : ""}
+              ${a.deadline ? `<span class="tag">${esc(a.deadline)}</span>` : ""}
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        if ((data.risks_or_blockers || []).length) {
+          html += `<div class="rb-section"><div class="rb-section-heading">Risks / Blockers</div>`;
+          data.risks_or_blockers.forEach(r => { html += `<div class="rb-list-item">${esc(r)}</div>`; });
+          html += `</div>`;
+        }
+
+        if ((data.next_steps || []).length) {
+          html += `<div class="rb-section"><div class="rb-section-heading">Next Steps</div>`;
+          data.next_steps.forEach(n => { html += `<div class="rb-list-item">${esc(n)}</div>`; });
+          html += `</div>`;
+        }
+
+        el.innerHTML = html;
+      }
+
+      // ---- HISTORY ----
+      function addHistoryEntry(instruction, ok) {
+        document.getElementById("history-section").style.display = "block";
+        const log = document.getElementById("history-log");
+        const entry = document.createElement("div");
+        entry.className = "history-entry";
+        entry.innerHTML = `
+          <span class="he-text">${esc(instruction)}</span>
+          <span class="tag" style="${ok ? "" : "color:var(--error);background:rgba(248,113,113,0.1);border-color:var(--error)"}">${ok ? "Applied" : "Failed"}</span>
+        `;
+        log.prepend(entry);
+      }
+
+      // ---- CHIPS ----
+      function fillInstruction(btn) {
+        document.getElementById("instruction-input").value = btn.textContent.trim();
+        document.getElementById("instruction-input").focus();
+      }
+
+      // ---- APPLY ----
+      async function applyChanges() {
+        const instruction = document.getElementById("instruction-input").value.trim();
+        if (!instruction) return;
+
+        const btn = document.getElementById("apply-btn");
+        const loadingEl = document.getElementById("loading-indicator");
+        const loadingText = document.getElementById("loading-text");
+        const banner = document.getElementById("save-banner");
+
+        btn.disabled = true;
+        loadingEl.style.display = "flex";
+        banner.style.display = "none";
+        loadingText.textContent = "Sending to Gemini…";
+
+        try {
+          const res = await fetch(`/edit/${MEETING_ID}/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ instruction, current_runbook: currentRunbook }),
+          });
+
+          loadingText.textContent = "Rebuilding document…";
+          const data = await res.json();
+
+          if (data.ok && data.runbook) {
+            currentRunbook = data.runbook;
+            renderPreview(currentRunbook);
+            addHistoryEntry(instruction, true);
+            document.getElementById("instruction-input").value = "";
+            banner.textContent = "✓ Changes applied — runbook rebuilt";
+            banner.className = "save-banner saved";
+          } else {
+            throw new Error(data.error || "Unknown error");
+          }
+        } catch (err) {
+          addHistoryEntry(instruction, false);
+          banner.textContent = "✕ " + err.message;
+          banner.className = "save-banner error";
+        }
+
+        banner.style.display = "block";
+        btn.disabled = false;
+        loadingEl.style.display = "none";
+      }
+
+      document.getElementById("instruction-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applyChanges(); }
+      });
+
+      function esc(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+
+      renderPreview(currentRunbook);
+    </script>
+  </body>
+</html>

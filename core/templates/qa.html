@@ -1,0 +1,134 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ask Questions — Meeting {{ meeting.id }}</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}" />
+  </head>
+
+  <body>
+    <div class="container">
+      <a href="/success/{{ meeting.id }}/" class="back-link">← Back to results</a>
+
+      <div id="page-data" data-meeting-id="{{ meeting.id }}" style="display:none"></div>
+
+      <div class="page-header">
+        <div class="label">Q&amp;A — Meeting {{ meeting.id }}</div>
+        <h1>Ask About This Meeting</h1>
+        <p>Questions are answered using the transcript and any uploaded PDF.</p>
+      </div>
+
+      <!-- Chat window -->
+      <div class="card" style="padding: 0; overflow: hidden; margin-bottom: 16px">
+        <div id="chat-log" class="chat-log">
+          <div class="chat-msg system">
+            Ask anything about this meeting — decisions made, who said what, action owners, topics discussed, and more.
+          </div>
+        </div>
+      </div>
+
+      <!-- Input row -->
+      <div class="qa-input-row">
+        <input
+          id="qa-input"
+          type="text"
+          class="edit-input"
+          placeholder="e.g. What were the key decisions made?"
+          autocomplete="off"
+        />
+        <button class="btn" id="qa-send" onclick="sendQuestion()">
+          <span>Ask</span><span>→</span>
+        </button>
+      </div>
+
+      <!-- Suggested questions -->
+      <div class="suggestions" id="suggestions">
+        <span class="suggestions-label">Try:</span>
+        <button class="suggestion-chip" onclick="fillQ(this)">What decisions were made?</button>
+        <button class="suggestion-chip" onclick="fillQ(this)">Who are the action item owners?</button>
+        <button class="suggestion-chip" onclick="fillQ(this)">What are the main risks or blockers?</button>
+        <button class="suggestion-chip" onclick="fillQ(this)">Summarise the meeting in 3 sentences.</button>
+        <button class="suggestion-chip" onclick="fillQ(this)">What are the next steps?</button>
+      </div>
+    </div>
+
+    <script>
+      const MEETING_ID = +document.getElementById("page-data").dataset.meetingId;
+      const chatLog    = document.getElementById("chat-log");
+      const input      = document.getElementById("qa-input");
+      const sendBtn    = document.getElementById("qa-send");
+
+      function getCookie(name) {
+        const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+        return match ? match[2] : "";
+      }
+
+      function fillQ(btn) {
+        input.value = btn.textContent;
+        input.focus();
+      }
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendQuestion();
+        }
+      });
+
+      function appendMsg(role, text, isLoading = false) {
+        const div = document.createElement("div");
+        div.className = `chat-msg ${role}`;
+        if (isLoading) {
+          div.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+          div.id = "loading-bubble";
+        } else {
+          div.textContent = text;
+        }
+        chatLog.appendChild(div);
+        chatLog.scrollTop = chatLog.scrollHeight;
+        return div;
+      }
+
+      async function sendQuestion() {
+        const question = input.value.trim();
+        if (!question) return;
+
+        input.value      = "";
+        input.disabled   = true;
+        sendBtn.disabled = true;
+
+        appendMsg("user", question);
+        const loadingBubble = appendMsg("assistant", "", true);
+
+        try {
+          const res = await fetch(`/qa/${MEETING_ID}/ask/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ question }),
+          });
+
+          const data = await res.json();
+          loadingBubble.remove();
+
+          if (data.answer) {
+            appendMsg("assistant", data.answer);
+          } else {
+            appendMsg("assistant error", "Error: " + (data.error || "Unknown error"));
+          }
+        } catch (err) {
+          loadingBubble.remove();
+          appendMsg("assistant error", "Network error — please try again.");
+        }
+
+        input.disabled   = false;
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    </script>
+  </body>
+</html>

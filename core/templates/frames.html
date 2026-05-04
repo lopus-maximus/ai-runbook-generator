@@ -1,0 +1,42 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Selected Frames</title>
+    <link rel="stylesheet" href="{% static 'style.css' %}" />
+  </head>
+
+  <body>
+    <div class="container">
+      <a href="javascript:history.back()" class="back-link"
+        >← Back to results</a
+      >
+
+      <div class="page-header">
+        <div class="label">Frame Preview</div>
+        <h1>Selected Frames</h1>
+        <p>
+          These frames were selected as the most content-rich from your video.
+        </p>
+      </div>
+
+      <div class="frames">
+        {% for frame in frames %}
+        <div class="frame-item">
+          <img
+            src="{{ frame.image.url }}"
+            alt="Frame {{ forloop.counter }}"
+            loading="lazy"
+          />
+        </div>
+        {% empty %}
+        <p style="color: var(--text-muted); font-size: 14px">
+          No frames available.
+        </p>
+        {% endfor %}
+      </div>
+    </div>
+  </body>
+</html>
